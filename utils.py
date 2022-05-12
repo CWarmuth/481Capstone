@@ -23,7 +23,11 @@ def chunks(lst, n):
 def chunk_size_helper(params):
     # Set the batch size (the size of the chunks determines the batch size). Default to 4 for GPT-2 and 20 for OpenAI if
     # no batch size is specified.
-    bs = params['bs']
+    try:
+        bs = params['bs']
+    except :
+        bs = None
+
     if bs is None:
         if 'gpt2' in params['model']:
             return 1
@@ -37,6 +41,7 @@ def random_sampling(sentences, labels, num):
     """randomly sample subset of the training pairs"""
     assert len(sentences) == len(labels)
     if num > len(labels):
+        # num = len()
         assert False, f"you tried to randomly sample {num}, which is more than the total size of the pool {len(labels)}"
     idxs = np.random.choice(len(labels), size=num, replace=False)
     selected_sentences = [sentences[i] for i in idxs]
@@ -53,7 +58,7 @@ def setup_gpt2(model_name):
         print("Setting up GPT-2 model")
         gpt2_model = GPT2LMHeadModel.from_pretrained(model_name)
         gpt2_model.eval().cuda()
-        
+
         gpt2_tokenizer = GPT2Tokenizer.from_pretrained(model_name)
         # to batch generation, we pad on the left and mask those positions out.
         gpt2_tokenizer.padding_side = "left"
@@ -73,7 +78,7 @@ def complete_gpt2(prompt, l=10, model_name='gpt2-xl', num_log_probs=None, echo=F
     if isinstance(prompt, str):
         prompt = [prompt] # the code below assumes a list
     input_ids = gpt2_tokenizer.batch_encode_plus(prompt, return_tensors="pt", padding=True)
-    
+
     # greedily generate l tokens
     if l > 0:
         # the generate function can handle left padded inputs automatically in HF
