@@ -484,7 +484,13 @@ def load_dataset(params):
         label_dict = {v: k for k, v in inv_label_dict.items()}
 
         params[
-            'prompt_prefix'] = "Classify the questions based on whether their answer type is a Number, Location, Person, Description, Entity, or Abbreviation.\n\n"
+            'prompt_prefix'] = "Classify the questions based on whether their answer type is a "
+
+        for i in range(len(inv_label_dict.keys()) - 1):
+            key = list(inv_label_dict.keys())[i]
+            params['prompt_prefix'] = params['prompt_prefix'] + key + ", "
+        params['prompt_prefix']\
+            = params['prompt_prefix'] + " or " + list(inv_label_dict.keys())[len(inv_label_dict.keys()) - 1] + ".\n\n"
         params["q_prefix"] = "Question: "
         params["a_prefix"] = "Answer Type: "
         params['label_dict'] = label_dict
