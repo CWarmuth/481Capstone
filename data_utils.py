@@ -56,6 +56,61 @@ inv_label_dict = {'abb': 0,
                   'weight': 49
                   }
 
+inv_label_dict_full = {'abbreviation': 0,
+                       'Expression': 1,
+                       'animals': 2,
+                       'organs': 3,
+                       'colors': 4,
+                       'inventions': 5,
+                       'currency': 6,
+                       'diseases': 7,
+                       'events': 8,
+                       'food': 9,
+                       'instruments': 10,
+                       'languages': 11,
+                       'letters': 12,
+                       'entities': 13,
+                       'plants': 14,
+                       'products': 15,
+                       'religions': 16,
+                       'sports': 17,
+                       'substances': 18,
+                       'symbols': 19,
+                       'techniques': 20,
+                       'equivalent': 21,
+                       'vehicles': 22,
+                       'special': 23,
+                       'definition': 24,
+                       'description': 25,
+                       'manner': 26,
+                       'reasons': 27,
+                       'group': 28,
+                       'individual': 29,
+                       'title': 30,
+                       'person': 31,
+                       'cities': 32,
+                       'countries': 33,
+                       'mountains': 34,
+                       'locations': 35,
+                       'states': 36,
+                       'postcodes': 37,
+                       'number': 38,
+                       'dates': 39,
+                       'measures': 40,
+                       'prices': 41,
+                       'ranks': 42,
+                       'numbers': 43,
+                       'duration': 44,
+                       'fractions': 45,
+                       'speed': 46,
+                       'temperature': 47,
+                       'size': 48,
+                       'weight': 49
+                       }
+
+
+
+
 
 def load_sst2():
     def process_raw_data_sst(lines):
@@ -444,7 +499,7 @@ def load_dataset(params):
     :return: train_x, train_y, test_x, test_y
     """
 
-    if params['dataset'] == 'sst2':
+    if 'sst2' in params['dataset']:
         orig_train_sentences, orig_train_labels, orig_test_sentences, orig_test_labels = load_sst2()
         params['prompt_prefix'] = ""
         params["q_prefix"] = "Review: "
@@ -481,20 +536,20 @@ def load_dataset(params):
     elif params['dataset'] == 'trec50':
         orig_train_sentences, orig_train_labels, orig_test_sentences, orig_test_labels = load_trec50()
 
-        label_dict = {v: k for k, v in inv_label_dict.items()}
+        label_dict = {v: [k] for k, v in inv_label_dict_full.items()}
 
         params[
             'prompt_prefix'] = "Classify the questions based on whether their answer type is a "
 
-        for i in range(len(inv_label_dict.keys()) - 1):
-            key = list(inv_label_dict.keys())[i]
+        for i in range(len(inv_label_dict_full.keys()) - 1):
+            key = list(inv_label_dict_full.keys())[i]
             params['prompt_prefix'] = params['prompt_prefix'] + key + ", "
-        params['prompt_prefix']\
-            = params['prompt_prefix'] + " or " + list(inv_label_dict.keys())[len(inv_label_dict.keys()) - 1] + ".\n\n"
+        params['prompt_prefix'] \
+            = params['prompt_prefix'] + " or " + list(inv_label_dict_full.keys())[len(inv_label_dict_full.keys()) - 1] + ".\n\n"
         params["q_prefix"] = "Question: "
         params["a_prefix"] = "Answer Type: "
         params['label_dict'] = label_dict
-        params['inv_label_dict'] = inv_label_dict
+        params['inv_label_dict'] = inv_label_dict_full
         params['task_format'] = 'classification'
         params['num_tokens_to_predict'] = 1
 

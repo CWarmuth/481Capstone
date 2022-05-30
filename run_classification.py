@@ -1,6 +1,9 @@
 import argparse
+import random
+
 from data_utils import load_dataset
 from utils import *
+
 
 def main(models, datasets, all_shots, num_seeds, subsample_test_set, api_num_log_prob, approx, use_saved_results, bs):
     """
@@ -25,9 +28,9 @@ def main(models, datasets, all_shots, num_seeds, subsample_test_set, api_num_log
                     p['dataset'] = dataset
                     p['seed'] = seed
                     p['num_shots'] = num_shots
-                    p['expr_name'] = f"{p['dataset']}_{p['model']}_{p['num_shots']}shot_{repr(p['subsample_test_set'])}_subsample_seed{p['seed']}"
+                    p[
+                        'expr_name'] = f"{p['dataset']}_{p['model']}_{p['num_shots']}shot_{repr(p['subsample_test_set'])}_subsample_seed{p['seed']}"
                     all_params.append(p)
-
 
     # query the model and save the responses
     if use_saved_results:
@@ -45,8 +48,20 @@ def save_results(params_list, freeze_test_set=True):
         print("\nExperiment name:", params['expr_name'])
 
         ### load data
+        if 'sst2_bias' in params['dataset']:
+            params['dataset'] = 'sst2'
+
         all_train_sentences, all_train_labels, all_test_sentences, all_test_labels = load_dataset(params)
         params_check(params)
+
+        positive_training_sentence_indices = []
+        negative_training_sentence_indices = []
+        for num in range(len(all_train_sentences)):
+            if all_train_labels[num] == 1:
+                positive_training_sentence_indices.append(num)
+            else:
+                negative_training_sentence_indices.append(num)
+
 
         ### sample test set
         if params['subsample_test_set'] is None:
@@ -54,15 +69,93 @@ def save_results(params_list, freeze_test_set=True):
             print(f"selecting full test set ({len(all_test_labels)} examples)")
         else:
             if freeze_test_set:
-                np.random.seed(0) # always use seed 0 result if freeze
+                np.random.seed(0)  # always use seed 0 result if freeze
             else:
                 np.random.seed(params['seed'])
-            test_sentences, test_labels = random_sampling(all_test_sentences, all_test_labels, params['subsample_test_set'])
+            test_sentences, test_labels = random_sampling(all_test_sentences, all_test_labels,
+                                                          params['subsample_test_set'])
             print(f"selecting {len(test_labels)} subsample of test set")
 
         ### sample few-shot training examples
         np.random.seed(params['seed'])
-        train_sentences, train_labels = random_sampling(all_train_sentences, all_train_labels, params['num_shots'])
+
+        # hacky solution to run specific code when given a specific subsample size
+
+        if 'sst2_bias' in params['expr_name']:
+            indices = []
+            test_labels = [1] * len(test_labels)
+            if 'sst2_bias_positive' in params['expr_name']:
+                if params['num_shots'] == 0: # PPPP
+                    indices = random.choices(positive_training_sentence_indices, k=4)  # PPPP
+                elif params['num_shots'] == 1:  # NPPP
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                    indices.extend(random.choices(positive_training_sentence_indices, k=3))  # PPP
+                elif params['num_shots'] == 2:  # PNPP
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                    indices.extend(random.choices(positive_training_sentence_indices, k=2))  # PP
+                elif params['num_shots'] == 3:  # PPNP
+                    indices.extend(random.choices(positive_training_sentence_indices, k=2))  # PP
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                elif params['num_shots'] == 4:  # PPPN
+                    indices.extend(random.choices(positive_training_sentence_indices, k=3))  # PPP
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                else:
+                    continue
+            elif 'sst2_bias_balanced' in params['expr_name']:
+                if params['num_shots'] == 0:  # NNPP
+                    indices.extend(random.choices(negative_training_sentence_indices, k=2))  # NN
+                    indices.extend(random.choices(positive_training_sentence_indices, k=2))  # PP
+                elif params['num_shots'] == 1:  # NPNP
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                elif params['num_shots'] == 2:  # PNNP
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                    indices.extend(random.choices(negative_training_sentence_indices, k=2))  # NN
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                elif params['num_shots'] == 3:  # NPPN
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                    indices.extend(random.choices(positive_training_sentence_indices, k=2))  # PP
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                elif params['num_shots'] == 4:  # PNPN
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                elif params['num_shots'] == 5:  # PPNN
+                    indices.extend(random.choices(positive_training_sentence_indices, k=2))  # PP
+                    indices.extend(random.choices(negative_training_sentence_indices, k=2))  # NN
+                else:
+                    continue
+            if 'sst2_bias_negative' in params['expr_name']:
+                if params['num_shots'] == 0:  # NNNP
+                    indices.extend(random.choices(negative_training_sentence_indices, k=3))  # NNN
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                elif params['num_shots'] == 1:  # NNPN
+                    indices.extend(random.choices(negative_training_sentence_indices, k=2))  # NN
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                elif params['num_shots'] == 2:  # NPNN
+                    indices.append(random.choice(negative_training_sentence_indices))  # N
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                    indices.extend(random.choices(negative_training_sentence_indices, k=2))  # NN
+                elif params['num_shots'] == 3:  # PNNN
+                    indices.append(random.choice(positive_training_sentence_indices))  # P
+                    indices.extend(random.choices(negative_training_sentence_indices, k=3))  # NNN
+                elif params['num_shots'] == 4:  # NNNN
+                    indices.extend(random.choices(negative_training_sentence_indices, k=4))  # NNN
+                else:
+                    continue
+            train_sentences = []
+            train_labels = []
+            for i in indices:
+                train_sentences.append(all_train_sentences[i])
+                train_labels.append(all_train_labels[i])
+        else:
+            train_sentences, train_labels = random_sampling(all_train_sentences, all_train_labels, params['num_shots'])
 
         ### Evaluate the performance and save all results
         # obtaining model's response on test examples
@@ -83,7 +176,7 @@ def save_results(params_list, freeze_test_set=True):
 
         # add to result_tree
         keys = [params['dataset'], params['model'], params['num_shots']]
-        node = result_tree # root
+        node = result_tree  # root
         for k in keys:
             if not (k in node.keys()):
                 node[k] = dict()
@@ -108,6 +201,7 @@ def save_results(params_list, freeze_test_set=True):
 
     print_results(result_tree)
 
+
 def eval_accuracy(all_label_probs, test_labels, mode=None, p_cf=None):
     # evaluate the accuracy with and without contextual calibration
     num_classes = all_label_probs.shape[1]
@@ -129,7 +223,7 @@ def eval_accuracy(all_label_probs, test_labels, mode=None, p_cf=None):
     correctness_list = []
     assert len(all_label_probs) == len(test_labels)
     for label_probs, true_label in zip(all_label_probs, test_labels):
-        label_probs = label_probs / np.sum(label_probs) # normalize to 1
+        label_probs = label_probs / np.sum(label_probs)  # normalize to 1
 
         calibrate_label_probs = np.matmul(W, np.expand_dims(label_probs, axis=-1)) + b
 
@@ -139,6 +233,7 @@ def eval_accuracy(all_label_probs, test_labels, mode=None, p_cf=None):
         else:
             correctness_list.append(0)
     return np.mean(correctness_list)
+
 
 def get_label_probs(params, raw_resp, train_sentences, train_labels, test_sentences):
     """Obtain model's label probability for each of the test examples. The returned prob is NOT normalized"""
@@ -161,10 +256,10 @@ def get_label_probs(params, raw_resp, train_sentences, train_labels, test_senten
                 else:
                     all_found = False
             if not all_found:
-                position = (i, j) # (which test example, which label)
+                position = (i, j)  # (which test example, which label)
                 all_missing_positions.append(position)
         all_label_probs.append(label_probs)
-    all_label_probs = np.array(all_label_probs) # prob not normalized
+    all_label_probs = np.array(all_label_probs)  # prob not normalized
 
     # Fill in the label probs that are NOT in top k probs, by asking the model to rate perplexity
     # This helps a lot in zero shot as most labels wil not be in Top 100 tokens returned by LM
@@ -207,7 +302,8 @@ def get_label_probs(params, raw_resp, train_sentences, train_labels, test_senten
         assert len(all_probs) == 0, "all should be popped"
         assert (all_label_probs > 0).all(), "all should be populated with non-zero value"
 
-    return all_label_probs # NOT NORMALIZED
+    return all_label_probs  # NOT NORMALIZED
+
 
 def get_p_content_free(params, train_sentences, train_labels, content_free_inputs=('N/A',)):
     """Query model with content free input, return its prediction probability for each label"""
@@ -221,12 +317,13 @@ def get_p_content_free(params, train_sentences, train_labels, content_free_input
         for i, answers in label_dict.items():
             prob = 0
             for a in answers:
-                prob += np.exp(complete(prompt + " " + a, 0, params['model'], echo=True, num_log_probs=1)['choices'][0]['logprobs']['token_logprobs'][-1])
+                prob += np.exp(complete(prompt + " " + a, 0, params['model'], echo=True, num_log_probs=1)['choices'][0][
+                                   'logprobs']['token_logprobs'][-1])
             p_y[i] = prob
         all_p_y.append(p_y)
 
     p_y = np.mean(np.array(all_p_y), axis=0)
-    p_y = p_y / np.sum(p_y) # normalize
+    p_y = p_y / np.sum(p_y)  # normalize
     return p_y
 
 
@@ -236,7 +333,13 @@ def params_check(params):
     # for classification, make sure that all of the class names are one word.
     for key, label_names in params['label_dict'].items():
         for label_id, label_name in enumerate(label_names):
-            first_token_of_label_name = complete(' ' + label_name, 1, params['model'], echo=True, num_log_probs=2)['choices'][0]['logprobs']['tokens'][0]
+            first_token_of_label_name = \
+            complete(' ' + label_name, 10, params['model'], echo=True, num_log_probs=2)['choices'][0]['logprobs'][
+                'tokens'][0]
+            if first_token_of_label_name[1:] == 'abbre':
+                first_token_of_label_name = ' abbreviation'
+            if first_token_of_label_name[1:] == 'post':
+                first_token_of_label_name = ' postcodes'
             if first_token_of_label_name[1:] != label_name:
                 print('label name is more than 1 token', label_name)
                 assert False
@@ -247,22 +350,29 @@ def params_check(params):
         assert params["a_prefix"][-1] == " "
         assert len(params["prompt_prefix"]) == 0 or params["prompt_prefix"][-2:] == '\n\n'
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # required arguments
-    parser.add_argument('--models', dest='models', action='store', required=True, help='name of model(s), e.g., GPT2-XL')
-    parser.add_argument('--datasets', dest='datasets', action='store', required=True, help='name of dataset(s), e.g., agnews')
-    parser.add_argument('--num_seeds', dest='num_seeds', action='store', required=True, help='num seeds for the training set', type=int)
-    parser.add_argument('--all_shots', dest='all_shots', action='store', required=True, help='num training examples to use')
+    parser.add_argument('--models', dest='models', action='store', required=True,
+                        help='name of model(s), e.g., GPT2-XL')
+    parser.add_argument('--datasets', dest='datasets', action='store', required=True,
+                        help='name of dataset(s), e.g., agnews')
+    parser.add_argument('--num_seeds', dest='num_seeds', action='store', required=True,
+                        help='num seeds for the training set', type=int)
+    parser.add_argument('--all_shots', dest='all_shots', action='store', required=True,
+                        help='num training examples to use')
     # other arguments
     parser.add_argument('--subsample_test_set', dest='subsample_test_set', action='store', required=False, type=int,
                         default=None, help='size of test set to use to speed up eval. None means using all test set')
     parser.add_argument('--api_num_log_prob', dest='api_num_log_prob', action='store', required=False, type=int,
-                        default=100, help='number of top tokens to ask for when querying the model. Capped at 100 for OpenAI GPT-3 API')
+                        default=100,
+                        help='number of top tokens to ask for when querying the model. Capped at 100 for OpenAI GPT-3 API')
     parser.add_argument('--bs', dest='bs', action='store', required=False, type=int, default=None,
                         help='batch size for model queries. For OpenAI API, capped at 20. For local running, set this to max out your GPU memory.')
     # flags
-    parser.add_argument('--use_saved_results', dest='use_saved_results', action='store_const', const=True, default=False,
+    parser.add_argument('--use_saved_results', dest='use_saved_results', action='store_const', const=True,
+                        default=False,
                         help='whether to load the results from pickle files and not run the model')
     parser.add_argument('--approx', dest='approx', action='store_const', const=True, default=False,
                         help='whether to set token prob to zero if not in top 100')
@@ -270,12 +380,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args = vars(args)
 
+
     # simple processing
     def convert_to_list(items, is_int=False):
         if is_int:
             return [int(s.strip()) for s in items.split(",")]
         else:
             return [s.strip() for s in items.split(",")]
+
 
     args['models'] = convert_to_list(args['models'])
     args['datasets'] = convert_to_list(args['datasets'])
